@@ -145,7 +145,7 @@ monitor(struct Trapframe *tf)
 //    unsigned int i = 0x00726c64;
 //    cprintf("H%x Wo%s", 57616, &i);
 
- //   cprintf("x=%d y=%d", 3);
+// //   cprintf("x=%d y=%d", 3);
 
 	while (1) {
 		buf = readline("K> ");
