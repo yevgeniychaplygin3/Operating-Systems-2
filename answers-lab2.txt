@@ -1,0 +1,14 @@
+1. unintptr_t
+2.  1023 is the entry. We need top 10 bits of VA to be 1023. 1023 = 1111111111 in binary. The rest of the bits are 0. So, for the full top 20 bits of the VA it would be: 11111111110000000000. Translate this to hex to get: ffc00. Add the offset back to get the VA of 0x0ffc0000. This process is repeated for the other entries.
+    1022-   0x0ff80000 Page table right before the top page table (1023) of physical memory.
+    2- UTEXT(Empty memory)
+    1- UTEMP(Empty memory)
+    960- 0xf0000000 Bottom of physical memory
+    956- 0xef000000 UPAGES
+    955- 0xeec00000 UTOP
+
+
+3.The permission were set using the PTE_U, PTE_W and PTE_P. Address spaces without the PTE_U flag will not allow user access. Tthe Current Privilege Level (CPL) in the lower 2 parts of the CS register pretects the kernel memory.
+4. 256MB to map all linear addresses to physical ones.
+5. 4MB of over head. 2 level page structure. 1024 entries in 1 page directory for 1024 page tables. Each entry is 4 KB. 4KB * 1024 = 4MB. There is also over head for the size of each page directory, which is an additional 4KB per directory.
+6. There is a jump instruction to an address above the EIP. To continue executing at a low EIP, we mapped the same virtual to physical address for the 4MB region. The transition is necessary because we won't be able to access the lower parts of memory.
