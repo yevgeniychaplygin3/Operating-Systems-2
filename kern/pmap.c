@@ -19,7 +19,7 @@ static size_t npages_basemem;	// Amount of base memory (in pages)
 pde_t *kern_pgdir;		// Kernel's initial page directory
 struct PageInfo *pages;		// Physical page state array
 static struct PageInfo *page_free_list;	// Free list of physical pages
-
+struct Env *envs;
 
 // --------------------------------------------------------------
 // Detect machine's physical memory setup.
@@ -96,7 +96,7 @@ boot_alloc(uint32_t n)
 	// to any kernel code or global variables.
 	if (!nextfree) {
 		extern char end[];
-		nextfree = ROUNDUP((char *) end, PGSIZE);
+		nextfree = ROUNDUP((char *) end +1, PGSIZE);
 	}
 
 	// Allocate a chunk large enough to hold 'n' bytes, then update
@@ -166,26 +166,17 @@ mem_init(void)
 	// array.  'npages' is the number of physical pages in memory.  Use memset
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
-     //struct PageInfo *pages;
-//     cprintf("\n%p\n",PADDR(kern_pgdir));
-    // cprintf("\npage size:%d\n",npages*PGSIZE);
-//     boot_map_region(kern_pgdir, KERNBASE
 
-    //struct PageInfo pages[npages] = boot_alloc(npages*sizeof(struct PageInfo));
     pages = (struct PageInfo *) boot_alloc(npages*sizeof(struct PageInfo));
     memset(pages,0,npages*sizeof(struct PageInfo));
-    //for(int i=0; i<npages; i++){
-      //  cprintf("pages[i]: %p pages.pp_link: %p pp_ref: %u \n", pages[i], pages[i].pp_link, pages[i].pp_ref);
-   //}
-//   cprintf("\n\nUPAGES:%x\n\n",UPAGES);
 
-
-//	panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
 
+    envs = (struct Env *) boot_alloc(NENV * sizeof(struct Env));
+    memset(envs,0, NENV * sizeof(struct Env));
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
 	// up the list of free physical pages. Once we've done so, all further
@@ -220,6 +211,8 @@ mem_init(void)
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
+    int perm2 = PTE_U | PTE_P;
+    boot_map_region(kern_pgdir, UENVS, NENV * sizeof(struct Env), PADDR(envs), perm2);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -660,7 +653,43 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
 
+    // recall that we used the rounding functions to round the va in region_alloc
+    // for values that aren't page aligned. so the va will be round down and va+len.
+
+    void *va_rounddown = ROUNDDOWN((void *) va, PGSIZE);
+    void *va_roundup = ROUNDUP((void *) va + len, PGSIZE);
+    pte_t *p_pte;
+    struct PageInfo *page;
+    for (void *i=va_rounddown; i<va_roundup; i += PGSIZE, va_rounddown+= PGSIZE){
+        // instead of allocing the page we will just lookup the env.
+        //struct PageInfo *page = page_alloc(0);
+        //page = page_lookup(env->env_pgdir, (void *)va, &p_pte);
+        p_pte = pgdir_walk(env->env_pgdir, va_rounddown, 0);
+        if (p_pte == NULL ){
+            user_mem_check_addr = (uint32_t) va;
+            return -E_FAULT;}
+
+        //check if address is below ULIM
+        if (((uint32_t) va_rounddown >= ULIM))
+        {
+            user_mem_check_addr = (uint32_t) va;
+            return -E_FAULT;
+        }
+        // check is the permissions are given
+        else if(perm != (*p_pte & perm))
+        {
+            user_mem_check_addr = (uint32_t) 0x1;
+            return -E_FAULT;
+        }
+        else if(!(PTE_P & *p_pte))
+        {
+            user_mem_check_addr = (uint32_t) va;
+            return -E_FAULT;
+        }
+
+    }
 	return 0;
+
 }
 
 //
