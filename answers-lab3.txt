@@ -1,0 +1,7 @@
+1. Having individual handler functions will allow the OS to catch specific exceptions and interruptions and possibly catch and resume exucution of a program. This will provide more protection to the kernel as well.
+
+2. I did not have to do anything to the softint program.  It should produce interrupt vector 13 because the handler for the pgflt is kernel level 0. The user program could access the any memory reference if the kernel allows the int $14 instruction.
+
+3. It depends on the privilege level you set in the SETGATE. The data privilege level needs to allow the user, ring 3, level in order for the breakpoint exception to work. If the data privilege level is kernel, ring 0, then this would cause a general protection fault.
+
+4. The point of these mechanisms is so that the user programs cannot invoke different interuptions or exceptions to get access to the kernel or memory/data that is only accessible to the kernel.
