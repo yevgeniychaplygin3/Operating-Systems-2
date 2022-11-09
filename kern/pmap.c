@@ -666,7 +666,7 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
         //page = page_lookup(env->env_pgdir, (void *)va, &p_pte);
         p_pte = pgdir_walk(env->env_pgdir, va_rounddown, 0);
         if (p_pte == NULL ){
-            user_mem_check_addr = (uint32_t) va;
+            //user_mem_check_addr = (uint32_t) 0x00001000;
             return -E_FAULT;}
 
         //check if address is below ULIM
@@ -676,14 +676,22 @@ user_mem_check(struct Env *env, const void *va, size_t len, int perm)
             return -E_FAULT;
         }
         // check is the permissions are given
-        else if(perm != (*p_pte & perm))
+        if(perm != (*p_pte & perm))
         {
-            user_mem_check_addr = (uint32_t) 0x1;
+            if( (uint32_t) va_rounddown < (uint32_t) va){
+                user_mem_check_addr = (uint32_t) va;
+            }
+            else{
+                user_mem_check_addr = (uint32_t) va_rounddown;
+            }
             return -E_FAULT;
         }
-        else if(!(PTE_P & *p_pte))
+        if(!(PTE_P & *p_pte))
         {
-            user_mem_check_addr = (uint32_t) va;
+            if( (uint32_t) va_rounddown < (uint32_t) va){
+                user_mem_check_addr = (uint32_t) va;
+            }else{
+            user_mem_check_addr = (uint32_t) va_rounddown;}
             return -E_FAULT;
         }
 
