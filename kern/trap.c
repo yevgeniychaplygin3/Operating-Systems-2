@@ -220,8 +220,6 @@ trap_dispatch(struct Trapframe *tf)
                 tf->tf_regs.reg_eax = ret;
                 return;
             }
-
-
     }
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
