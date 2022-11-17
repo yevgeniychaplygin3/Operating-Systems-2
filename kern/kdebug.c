@@ -149,7 +149,14 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 		stabstr_end = usd->stabstr_end;
 
 		// Make sure the STABS and string table memory is valid.
-		// LAB 3: Your code here.
+		// LAB 3: Your code here
+
+        // len is the len of each env
+        if (user_mem_check(curenv, usd,sizeof( struct UserStabData) , PTE_U)){return -1;}
+        // len here is the len of the stabstr, which is fomr stabstr to stabstr_end.
+        // Subtract to get the len of stabstr.
+        if (user_mem_check(curenv, stabs, sizeof(struct Stab) , PTE_U)){return -1;}
+        if (user_mem_check(curenv, stabstr, (stabstr_end - stabstr), PTE_U)){return -1;}
 	}
 
 	// String table validity checks
@@ -205,7 +212,8 @@ debuginfo_eip(uintptr_t addr, struct Eipdebuginfo *info)
 	//	Look at the STABS documentation and <inc/stab.h> to find
 	//	which one.
 	// Your code here.
-
+    stab_binsearch(stabs, &lline, &rline, N_SLINE, addr);
+    info->eip_line = stabs[lline].n_desc; // ?
 
 	// Search backwards from the line number for the relevant filename
 	// stab.

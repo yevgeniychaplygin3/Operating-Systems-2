@@ -26,6 +26,7 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+    { "backtrace", "-Show the backtrace of the current kernel stack", mon_backtrace },
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -59,13 +60,32 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
-	// LAB 1: Your code here.
+	int *ebp = (int *) read_ebp();
+
+    cprintf("Stack backtrace:\n");
+    while (ebp!= 0){
+    	cprintf("  ebp %08x eip %08x args %08x %08x %08x %08x %08x\n", ebp, ebp[1], ebp[2], ebp[3],ebp[4],ebp[5],ebp[5]);
+        struct Eipdebuginfo info;
+        debuginfo_eip(ebp[1], &info);
+
+
+        cprintf("\t%s:%d: ",info.eip_file, info.eip_line);
+        cprintf("%.*s", info.eip_fn_namelen, info.eip_fn_name);
+        //cprintf("ebp %x\n", ebp);
+        //cprintf("eip %03x\n", ebp[1]);
+        cprintf("+%d\n", ebp[1]-info.eip_fn_addr);
+        ebp = (int*) ebp[0];
+    }
+//	cprintf("Hello y %p\n\n", read_ebp());
+
+
+
+
+    // LAB 1: Your code here.
     // HINT 1: use read_ebp().
     // HINT 2: print the current ebp on the first line (not current_ebp[0])
 	return 0;
 }
-
-
 
 /***** Kernel monitor command interpreter *****/
 
@@ -95,7 +115,7 @@ runcmd(char *buf, struct Trapframe *tf)
 			return 0;
 		}
 		argv[argc++] = buf;
-		while (*buf && !strchr(WHITESPACE, *buf))
+        while (*buf && !strchr(WHITESPACE, *buf))
 			buf++;
 	}
 	argv[argc] = 0;
@@ -119,8 +139,19 @@ monitor(struct Trapframe *tf)
 	cprintf("Welcome to the JOS kernel monitor!\n");
 	cprintf("Type 'help' for a list of commands.\n");
 
+//<<<<<<< HEAD
 	if (tf != NULL)
 		print_trapframe(tf);
+//=======
+//    int x = 1, y = 3, z = 4;
+//  cprintf("x %d, y %x, z %d\n", x, y, z);
+
+//    unsigned int i = 0x00646c72;
+//    unsigned int i = 0x00726c64;
+//    cprintf("H%x Wo%s", 57616, &i);
+
+// //   cprintf("x=%d y=%d", 3);
+//>>>>>>> lab2
 
 	while (1) {
 		buf = readline("K> ");
