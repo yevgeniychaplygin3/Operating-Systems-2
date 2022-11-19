@@ -693,7 +693,28 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+    cprintf("here\n\n");
+
+    uintptr_t pa_start = ROUNDDOWN(pa, PGSIZE);
+    uintptr_t pa_end = ROUNDUP(pa+size, PGSIZE);
+    uintptr_t pa_offset = pa & 0xfff;
+    uintptr_t va_start = base;
+    uintptr_t new_base = va_start + pa_end - pa_start;
+    boot_map_region(kern_pgdir, base,size, pa_start, PTE_W|PTE_PCD|PTE_PWT);
+
+    cprintf("1: pa_end:%x\n", pa_end);
+    pa_end -= pa_start;
+    cprintf("2: pa_end:%x\n", pa_end);
+
+    cprintf("1: base:%x\n", base);
+    base += size;
+    cprintf("2: base:%x\n", base);
+    cprintf("return: %x\n", base-pa_end);
+
+    //if (pa_end >MMIOLIM) panic("panic in mmio_map_region()");
+//	panic("mmio_map_region not implemented");
+    return (void*)(pa + pa_offset);
+
 }
 
 static uintptr_t user_mem_check_addr;
