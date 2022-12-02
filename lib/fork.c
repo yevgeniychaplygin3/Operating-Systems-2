@@ -51,8 +51,6 @@ pgfault(struct UTrapframe *utf)
 static int
 duppage(envid_t envid, unsigned pn)
 {
-	int r;
-
 	// LAB 4: Your code here.
 	panic("duppage not implemented");
 	return 0;

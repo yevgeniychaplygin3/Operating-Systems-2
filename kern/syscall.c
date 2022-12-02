@@ -83,6 +83,16 @@ sys_exofork(void)
 	// from the current environment -- but tweaked so sys_exofork
 	// will appear to return 0.
 
+    struct Env *e;
+    int returnval = env_alloc(&e, curenv ? curenv->env_id:0);
+    if (returnval <0) return returnval;
+
+    e->env_status = ENV_NOT_RUNNABLE;
+    e->env_tf = curenv->env_tf;
+    e->env_tf.tf_regs.reg_eax = 0;
+    return e->env_id;
+
+
 	// LAB 4: Your code here.
 	panic("sys_exofork not implemented");
 }
@@ -102,6 +112,16 @@ sys_env_set_status(envid_t envid, int status)
 	// You should set envid2env's third argument to 1, which will
 	// check whether the current environment has permission to set
 	// envid's status.
+    struct Env *e;
+
+
+    int env_id = envid2env(envid, &e, 1);
+    if (env_id < 0) return env_id;
+    if ((status == ENV_RUNNABLE) && (status == ENV_NOT_RUNNABLE)) return -E_INVAL;
+
+    e->env_status = status;
+
+    return 0;
 
 	// LAB 4: Your code here.
 	panic("sys_env_set_status not implemented");
@@ -118,6 +138,7 @@ sys_env_set_status(envid_t envid, int status)
 static int
 sys_env_set_pgfault_upcall(envid_t envid, void *func)
 {
+
 	// LAB 4: Your code here.
 	panic("sys_env_set_pgfault_upcall not implemented");
 }
@@ -148,7 +169,20 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 	//   If page_insert() fails, remember to free the page you
 	//   allocated!
 
-	// LAB 4: Your code here.
+    struct Env *e;
+    struct PageInfo *pp = page_alloc(ALLOC_ZERO);
+    if (pp == NULL) return -E_NO_MEM;
+    if ((perm & 0xfff) & (~PTE_SYSCALL)) return -E_INVAL;
+    if ((uintptr_t)va & 0xfff) return -E_INVAL;
+
+    int id = envid2env(envid, &e, 1);
+    if (id<0) return -E_BAD_ENV;
+
+    int check_res = page_insert(e->env_pgdir, pp, va, perm);
+    if (check_res != 0) return -E_NO_MEM;
+    return 0;
+
+    // LAB 4: Your code here.
 	panic("sys_page_alloc not implemented");
 }
 
@@ -178,8 +212,35 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	//   parameters for correctness.
 	//   Use the third argument to page_lookup() to
 	//   check the current permissions on the page.
+    struct Env *src,*dst;
+    struct PageInfo *srcpp;
+    pte_t *pte_table;
 
-	// LAB 4: Your code here.
+    //-E_BAD_ENV if srcenvid and/or dstenvid doesn't currently exist,
+    //or the caller doesn't have permission to change one of them.
+    //use envid2env to check srcenvid and dstenvid
+    if (envid2env(srcenvid,&src,1)<0)
+        return -E_BAD_ENV;
+    if (envid2env(dstenvid,&dst,1)<0)
+        return -E_BAD_ENV;
+    //check if the permission is appropriate
+    if ((perm & 0xfff) & (~PTE_SYSCALL)) return -E_INVAL;
+
+    if ((uintptr_t)srcva>= UTOP || (uintptr_t)dstva >= UTOP)
+        return -E_INVAL;
+    //check if they are not page aligned (0xfff)
+    if (((uintptr_t)srcva & 0xfff) || (uintptr_t)dstva & 0xfff)
+        return -E_INVAL;
+
+    if (!(srcpp = page_lookup(src->env_pgdir,srcva,&pte_table)))
+        return -E_INVAL;
+    if (((*pte_table)&PTE_W) == 0 && (perm & PTE_W))
+        return -E_INVAL;
+    if (page_insert(dst->env_pgdir,srcpp,dstva,perm) < 0)
+        return -E_NO_MEM;
+    return 0;
+
+    // LAB 4: Your code here.
 	panic("sys_page_map not implemented");
 }
 
@@ -194,7 +255,14 @@ static int
 sys_page_unmap(envid_t envid, void *va)
 {
 	// Hint: This function is a wrapper around page_remove().
+    struct Env *e;
+    if (envid2env(envid,&e,1) < 0) return -E_BAD_ENV;
 
+    if ((uintptr_t)va >= UTOP || (uintptr_t) va &0xfff)
+        return -E_INVAL;
+    pde_t *pgdir = e->env_pgdir;
+    page_remove(pgdir,va);
+    return 0;
 	// LAB 4: Your code here.
 	panic("sys_page_unmap not implemented");
 }
@@ -273,8 +341,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 
 
 //	panic("syscall not implemented");
-
-	switch (syscallno) {
+	switch (syscallno)
+    {
 	    case SYS_cputs:
               {
                 sys_cputs((const char *)a1, (size_t)a2);
@@ -283,23 +351,55 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
         case SYS_cgetc:
             {
                return sys_cgetc();
-               // return 0;
+               break;
             }
         case SYS_env_destroy:
                 {
                     return sys_env_destroy(a1);
-                    //return 0;
+                    break;
                 }
         case SYS_getenvid:
                 {
-                     return sys_getenvid();
-                    //return 0;
+                    return sys_getenvid();
+                    break;
                 }
-
-
+        case SYS_yield:
+                {
+                    sys_yield();
+                    break;
+                }
+        case SYS_exofork:
+        {
+            return sys_exofork();
+            break;
+        }
+        case SYS_env_set_status:
+        {
+            return sys_env_set_status(a1,a2);
+            break;
+        }
+        case SYS_page_alloc:
+        {
+            return sys_page_alloc(a1,(void*)a2,a3);
+            break;
+        }
+        case SYS_page_map:
+        {
+            return sys_page_map(a1,(void*)a2,a3,(void*)a4,a5);
+            break;
+        }
+        case SYS_page_unmap:
+        {
+            return sys_page_unmap(a1,(void*)a2);
+            break;
+        }
 
         default:
-		return -E_INVAL;
-	}
+        {
+		    return -E_INVAL;
+
+        }
+    }
+        return 0;
 }
 

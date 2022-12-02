@@ -199,6 +199,7 @@ env_setup_vm(struct Env *e)
 	// LAB 3: Your code here.
     // we have to get the page directery. to do that set the environments
     // page directory to equal the PageInfo p struct's va.
+    p->pp_ref += 1;
     e->env_pgdir = (pde_t *) page2kva(p);
     memcpy(e->env_pgdir, kern_pgdir, PGSIZE);
 
@@ -206,7 +207,6 @@ env_setup_vm(struct Env *e)
     for (i = PDX(UTOP); i<NPDENTRIES; ++i){
         e->env_pgdir[i] = kern_pgdir[i];
     }
-    p->pp_ref += 1;
     // UVPT maps the env's own page table read-only.
 	// Permissions: kernel R, user R
 	e->env_pgdir[PDX(UVPT)] = PADDR(e->env_pgdir) | PTE_P | PTE_U;
@@ -578,7 +578,6 @@ env_run(struct Env *e)
     //2.
     env_pop_tf(&e->env_tf);
 */
-
     if (e->env_status == ENV_RUNNING){
         e->env_status = ENV_RUNNABLE;
     }
@@ -586,6 +585,7 @@ env_run(struct Env *e)
     e->env_status = ENV_RUNNING;
     e->env_runs++;
     lcr3(PADDR(e->env_pgdir));
+    unlock_kernel();
     env_pop_tf(&e->env_tf);
 //	panic("env_run not yet implemented");
 }

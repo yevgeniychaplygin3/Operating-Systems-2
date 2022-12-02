@@ -1,0 +1,11 @@
+1.
+The MPBOOTPHYS is a macro to get the physical address. Since the mpEntry is going to be in protected mode after booting, all the addresses will by virtual. The boot.S is still in real
+mode and does not need to have the macro for the physical address.
+
+2.
+We need a separate kernel stack for each cpu because when an interupt happens there are multiple instructions to handle the interupt before the lock is checked, meaning that multiple CPUS can access the kernel and may cause a data race.
+
+3.
+The e pointer can be dereferenced both before and after the addressing switch because in the kernel virtual memory it is the same for each environment.
+4.
+It has to ensure the old enviroments registers are saved because when a context switch happens, in order for the enviroment to continue execution it must restore the context which is stored in the registers. It happens in trap.c where the trap from is copied to the current enviroment trap frame. The code curenv->env_tf = *tf is where this copying happens.

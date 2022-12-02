@@ -294,6 +294,12 @@ mem_init_mp(void)
 	//
 	// LAB 4: Your code here:
 
+    size_t i;
+    // do this for each CPU (NCPUS);
+    for (i=0; i<NCPU;i++)
+    {
+        boot_map_region(kern_pgdir, KSTACKTOP -KSTKSIZE -i * (KSTKSIZE+KSTKGAP), KSTKSIZE, PADDR(&percpu_kstacks[i]), PTE_W);
+    }
 }
 
 // --------------------------------------------------------------
@@ -314,7 +320,6 @@ page_init(void)
 	// LAB 4:
 	// Change your code to mark the physical page at MPENTRY_PADDR
 	// as in use
-
 	// The example code here marks all physical pages as free.
 	// However this is not truly the case.  What memory is free?
 	//  1) Mark physical page 0 as in use.
@@ -341,36 +346,58 @@ page_init(void)
      the pp_reg as 1. Or you can do: staring at iophysmem to nextfree ( get
      nextfree by calling bootalloc(0);*/
 
+
+    size_t i;
     pages[0].pp_ref = 1;
-    //cprintf("\n pages[0]: ppref:%d pplink:%p\n", pages[0].pp_ref,pages[0].pp_link);
-    //int count = 0;
-    // from page one to the IOPHYSMEM at physical address 0x0A0000, this can be
-    // marked as free page. PGSIZE is 4096.
-    for(size_t i = 1; i<npages_basemem;i++){
+    pages[0].pp_link = NULL;
+
+    /* from page one to the IOPHYSMEM at physical address 0x0A0000, this can be
+     marked as free page. PGSIZE is 4096.*/
+
+    for ( i = 1; i < MPENTRY_PADDR/PGSIZE; i++)
+    {
         pages[i].pp_ref = 0;
-        //pages[i].pp_link = page_free_list;
-        //page_free_list = &pages[i];
+        pages[i].pp_link = page_free_list;
+        page_free_list = &pages[i];
     }
+    // reference from boot_alloc()
+    extern unsigned char mpentry_start[];
+    extern unsigned char mpentry_end[];
+
+
+    size_t mpsize = ROUNDUP(mpentry_end-mpentry_start,PGSIZE);
+
+    for (; i<((MPENTRY_PADDR+mpsize)/PGSIZE); i++)
+    {
+        pages[i].pp_ref = 1;
+        pages[i].pp_link = NULL;
+    }
+
+    for (; i < npages_basemem; i++)
+    {
+        pages[i].pp_ref = 0;
+        pages[i].pp_link = page_free_list;
+        page_free_list = &pages[i];
+    }
+
+
 
     /* After that, the IOPHYSMEM starts (because the npages_basemem is 160,
      and 160 * PGSIZE = 160 * 4096 = 655360, and IOPHYSMEM is 0x0A0000 or 655360
      in decimal. From there, including the extphysmem, the kernel code, and the struct
      PageInfo *pages, this will all be in use.*/
 
-//    cprintf("\n\n io:%d  io/pgsize:%d  ext:%d  ext/pgsize:%d", IOPHYSMEM, IOPHYSMEM/PGSIZE, EXTPHYSMEM, EXTPHYSMEM/PGSIZE);
-
-        for(size_t i = IOPHYSMEM/PGSIZE; i<EXTPHYSMEM/PGSIZE; i++)
-        {
-            pages[i].pp_ref = 1;
-        }
-
-    size_t i;
-	for (i = EXTPHYSMEM/PGSIZE; i < PADDR(boot_alloc(0))/PGSIZE; i++) {
+    for( i = IOPHYSMEM/PGSIZE; i < EXTPHYSMEM/PGSIZE; i++)
+    {
         pages[i].pp_ref = 1;
+        pages[i].pp_link = NULL;
     }
-
-    for (i = (size_t)PADDR(boot_alloc(0))/PGSIZE; i<npages; i++) {
-        pages[i].pp_ref = 0;
+    for (;i< (size_t)PADDR(boot_alloc(0))/PGSIZE; i++) {
+        pages[i].pp_ref = 1;
+        pages[i].pp_link = NULL;
+    }
+/*	for (i = EXTPHYSMEM/PGSIZE; i < PADDR(boot_alloc(0))/PGSIZE; i++) {
+        pages[i].pp_ref = 1;
     }
 
     // build a linked list of free pages
@@ -381,7 +408,30 @@ page_init(void)
         }
     }
 
+    for (i = 1; i < npages_basemem; i++)
+    {
+        pages[i].pp_ref = 0;
+        pages[i].pp_link = page_free_list;
+        page_free_list = &pages[i];
+    }
 
+
+    for (i = 1; i < MPENTRY_PADDR/PGSIZE; i++)
+    {
+        pages[i].pp_ref = 0;
+        pages[i].pp_link = page_free_list;
+        page_free_list = &pages[i];
+    }
+
+    }*/
+
+
+    for (; i<npages; i++)
+    {
+        pages[i].pp_ref = 0;
+        pages[i].pp_link = page_free_list;
+        page_free_list = &pages[i];
+    }
 }
 
 
@@ -693,27 +743,22 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-    cprintf("here\n\n");
 
     uintptr_t pa_start = ROUNDDOWN(pa, PGSIZE);
     uintptr_t pa_end = ROUNDUP(pa+size, PGSIZE);
-    uintptr_t pa_offset = pa & 0xfff;
+
+    uintptr_t pa_offset = pa & 0xfff; // gets the last 12-bit of the address
     uintptr_t va_start = base;
     uintptr_t new_base = va_start + pa_end - pa_start;
-    boot_map_region(kern_pgdir, base,size, pa_start, PTE_W|PTE_PCD|PTE_PWT);
+    size_t s = pa_end - pa_start;
 
-    cprintf("1: pa_end:%x\n", pa_end);
-    pa_end -= pa_start;
-    cprintf("2: pa_end:%x\n", pa_end);
 
-    cprintf("1: base:%x\n", base);
-    base += size;
-    cprintf("2: base:%x\n", base);
-    cprintf("return: %x\n", base-pa_end);
-
-    //if (pa_end >MMIOLIM) panic("panic in mmio_map_region()");
-//	panic("mmio_map_region not implemented");
-    return (void*)(pa + pa_offset);
+    if (pa_end-pa_start >MMIOLIM) panic("panic in mmio_map_region()");
+	//panic("mmio_map_region not implemented");
+    boot_map_region(kern_pgdir, va_start, size, pa_start, PTE_W|PTE_PCD|PTE_PWT);
+    void *oldbase = (void *) base;
+    base += s;
+    return oldbase;
 
 }
 
